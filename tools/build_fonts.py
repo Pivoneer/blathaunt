@@ -129,6 +129,7 @@ def build(name):
     fb.setupOS2(sTypoAscender=ascent * PIXEL, sTypoDescender=-descent * PIXEL,
                 usWinAscent=ascent * PIXEL, usWinDescent=descent * PIXEL,
                 usWeightClass=400, fsSelection=0x40, achVendID="BLTH",
+                ulCodePageRange1=0x00000005,  # Latin 1 (1252) + Cyrillic (1251); Word ignores fonts with none
                 sxHeight=0, sCapHeight=0)
     fb.setupPost(isFixedPitch=int(name.endswith("mono")))
     # recompute bounds/metrics from outlines
@@ -136,6 +137,12 @@ def build(name):
         g = fb.font["glyf"][n]
         g.recalcBounds(fb.font["glyf"])
         fb.font["hmtx"][n] = (metrics[n][0], getattr(g, "xMin", 0) if g.numberOfContours else 0)
+
+    os2 = fb.font["OS/2"]
+    os2.recalcUnicodeRanges(fb.font)
+    os2.sCapHeight = getattr(fb.font["glyf"]["uni0048"], "yMax", 0)
+    os2.sxHeight = getattr(fb.font["glyf"]["uni0078"], "yMax", 0)
+    os2.panose.bProportion = 9 if name.endswith("mono") else 0
 
     out = ROOT / "fonts" / f"{name}.ttf"
     fb.save(out)
