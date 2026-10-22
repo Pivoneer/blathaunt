@@ -15,6 +15,9 @@ from pathlib import Path
 
 from fontTools.fontBuilder import FontBuilder
 from fontTools.pens.ttGlyphPen import TTGlyphPen
+from fontTools.ttLib import newTable
+from fontTools.ttLib.tables import ttProgram
+Program = ttProgram.Program
 
 ROOT = Path(__file__).resolve().parent.parent
 PIXEL = 100  # font units per bitmap pixel
@@ -95,9 +98,14 @@ def build(name):
     for i, g in enumerate(glyphs):
         code = first + i
         _, w, h, x_adv, x_off, y_off = g
+        runs = glyph_runs(data, g)
+        if code == 0xA0:  # no-break space must match the space width
+            x_adv = glyphs[0x20 - first][3]
+        elif code != 0x20 and not runs:
+            continue  # unused placeholder slot: don't advertise an invisible glyph
         gname = "uni%04X" % to_unicode(code)
         pen = TTGlyphPen(None)
-        for rx, ry, rw in glyph_runs(data, g):
+        for rx, ry, rw in runs:
             x0 = (x_off + rx) * PIXEL
             x1 = x0 + rw * PIXEL
             y1 = (-y_off - ry) * PIXEL
@@ -117,7 +125,7 @@ def build(name):
     fb.setupHorizontalMetrics({n: (adv, 0) for n, (adv, _) in metrics.items()})
     fb.setupHorizontalHeader(ascent=ascent * PIXEL, descent=-descent * PIXEL)
     ps_name = family.replace(" ", "") + "-Regular"
-    fb.setupNameTable({
+    fb.setupNameTable(mac=False, nameStrings={
         "copyright": "Apache License 2.0",
         "familyName": family,
         "styleName": "Regular",
@@ -131,6 +139,10 @@ def build(name):
                 usWeightClass=400, fsSelection=0x40, achVendID="BLTH",
                 ulCodePageRange1=0x00000005,  # Latin 1 (1252) + Cyrillic (1251); Word ignores fonts with none
                 sxHeight=0, sCapHeight=0)
+    gasp = newTable("gasp")
+    gasp.version = 1
+    gasp.gaspRange = {0xFFFF: 0x000F}
+    fb.font["gasp"] = gasp
     fb.setupPost(isFixedPitch=int(name.endswith("mono")))
     # recompute bounds/metrics from outlines
     for n in order:
@@ -142,7 +154,13 @@ def build(name):
     os2.recalcUnicodeRanges(fb.font)
     os2.sCapHeight = getattr(fb.font["glyf"]["uni0048"], "yMax", 0)
     os2.sxHeight = getattr(fb.font["glyf"]["uni0078"], "yMax", 0)
+    os2.panose.bFamilyType = 2  # Latin Text
     os2.panose.bProportion = 9 if name.endswith("mono") else 0
+
+    prep = newTable("prep")  # SCANCTRL/SCANTYPE: smart dropout control for rasterizers
+    prep.program = Program()
+    prep.program.fromBytecode(bytes([0xB8, 0x01, 0xFF, 0x85, 0xB0, 0x04, 0x8D]))
+    fb.font["prep"] = prep
 
     out = ROOT / "fonts" / f"{name}.ttf"
     fb.save(out)
