@@ -18,6 +18,7 @@ from fontTools.pens.ttGlyphPen import TTGlyphPen
 
 ROOT = Path(__file__).resolve().parent.parent
 PIXEL = 100  # font units per bitmap pixel
+VERSION = "1.000"
 
 NAMES = {
     "blathauntbig": "Blathaunt Big",
@@ -115,9 +116,20 @@ def build(name):
     fb.setupGlyf(glyf)
     fb.setupHorizontalMetrics({n: (adv, 0) for n, (adv, _) in metrics.items()})
     fb.setupHorizontalHeader(ascent=ascent * PIXEL, descent=-descent * PIXEL)
-    fb.setupNameTable({"familyName": family, "styleName": "Regular"})
+    ps_name = family.replace(" ", "") + "-Regular"
+    fb.setupNameTable({
+        "copyright": "Apache License 2.0",
+        "familyName": family,
+        "styleName": "Regular",
+        "uniqueFontIdentifier": f"{VERSION};{ps_name}",
+        "fullName": family,
+        "version": f"Version {VERSION}",
+        "psName": ps_name,
+    })
     fb.setupOS2(sTypoAscender=ascent * PIXEL, sTypoDescender=-descent * PIXEL,
-                usWinAscent=ascent * PIXEL, usWinDescent=descent * PIXEL)
+                usWinAscent=ascent * PIXEL, usWinDescent=descent * PIXEL,
+                usWeightClass=400, fsSelection=0x40, achVendID="BLTH",
+                sxHeight=0, sCapHeight=0)
     fb.setupPost(isFixedPitch=int(name.endswith("mono")))
     # recompute bounds/metrics from outlines
     for n in order:
